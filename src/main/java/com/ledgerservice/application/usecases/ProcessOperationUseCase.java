@@ -103,7 +103,6 @@ public class ProcessOperationUseCase {
      */
     @Transactional
     private Operation executeTransactional(ProcessOperationCommand command) {
-        // 1. Idempotency check - if already processed, return existing
         var existing = operationRepository.findByExternalReference(command.externalReference().getValue());
         if (existing.isPresent()) {
             var existingOp = EntityMapper.toDomain(existing.get());
@@ -113,13 +112,10 @@ public class ProcessOperationUseCase {
             return existingOp;
         }
 
-        // 2. Validate accounts exist
         validateAccountsExist(command);
 
-        // 3. Create operation
         Operation operation = Operation.create(command.externalReference(), command.type());
 
-        // 4. Create entries based on operation type
         List<Entry> entries = createEntries(operation, command);
 
         // Note: Double-entry validation removed temporarily
@@ -127,23 +123,19 @@ public class ProcessOperationUseCase {
         // system/transit account entries to balance. This will be
         // implemented in Phase 6 with proper account architecture.
 
-        // 5. Persist operation
         var operationJpa = EntityMapper.toJpa(operation);
         operationJpa = operationRepository.save(operationJpa);
 
-        // 6. Persist entries
         entries.stream()
                 .map(EntityMapper::toJpa)
                 .forEach(entryRepository::save);
 
-        // 7. Mark operation as processed
         operationJpa.setStatus(OperationStatus.PROCESSED);
         operationJpa.setProcessedAt(LocalDateTime.now());
         operationJpa = operationRepository.save(operationJpa);
 
         Operation result = EntityMapper.toDomain(operationJpa);
 
-        // Log successful processing
         structuredLogger.logOperationProcessed(
                 result.getId(),
                 result.getExternalReference().getValue(),
@@ -170,7 +162,6 @@ public class ProcessOperationUseCase {
 
         switch (command.type()) {
             case DEPOSIT -> {
-                // Credit to target account
                 Entry credit = entryFactory.createCreditEntry(
                         operation.getId(),
                         command.targetAccountId(),
@@ -180,7 +171,6 @@ public class ProcessOperationUseCase {
                 entries.add(credit);
             }
             case WITHDRAWAL -> {
-                // Debit from source account
                 Entry debit = entryFactory.createDebitEntry(
                         operation.getId(),
                         command.sourceAccountId(),
@@ -190,7 +180,6 @@ public class ProcessOperationUseCase {
                 entries.add(debit);
             }
             case TRANSFER -> {
-                // Debit from source, credit to target
                 Entry debit = entryFactory.createDebitEntry(
                         operation.getId(),
                         command.sourceAccountId(),
@@ -230,7 +219,6 @@ public class ProcessOperationUseCase {
             if (amount == null || !amount.isPositive())
                 throw new IllegalArgumentException("Amount must be positive");
 
-            // Type-specific validations
             switch (type) {
                 case DEPOSIT -> {
                     if (targetAccountId == null)

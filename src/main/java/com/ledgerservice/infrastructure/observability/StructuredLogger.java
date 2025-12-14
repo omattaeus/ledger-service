@@ -114,13 +114,10 @@ public class StructuredLogger {
     }
 
     private String formatEvent(Map<String, Object> event) {
-        // Simple key=value format for readability
-        // In production, this could be JSON for better parsing
         StringBuilder sb = new StringBuilder();
         event.forEach((key, value) -> {
-            if (sb.length() > 0) {
+            if (sb.length() > 0)
                 sb.append(", ");
-            }
             sb.append(key).append("=").append(value);
         });
         return sb.toString();

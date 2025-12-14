@@ -49,11 +49,9 @@ public class ReconcileAccountUseCase {
 
         @Transactional
         public ReconciliationResult execute(UUID accountId, Money expectedBalance) {
-                // 1. Validate account exists
                 accountRepository.findById(accountId)
                                 .orElseThrow(() -> new AccountNotFoundException(accountId));
 
-                // 2. Load all entries and calculate balance
                 var entryJpaList = entryRepository.findByAccountIdOrderByCreatedAtAsc(accountId);
                 List<Entry> entries = entryJpaList.stream()
                                 .map(EntityMapper::toDomain)
@@ -61,13 +59,11 @@ public class ReconcileAccountUseCase {
 
                 Money calculatedBalance = balanceCalculator.calculateBalance(entries);
 
-                // 3. Create reconciliation record (domain logic)
                 ReconciliationRecord reconciliation = ReconciliationRecord.create(
                                 accountId,
                                 expectedBalance,
                                 calculatedBalance);
 
-                // Log reconciliation result
                 if (reconciliation.isMismatch()) {
                         structuredLogger.logReconciliationMismatch(
                                         accountId,
@@ -80,7 +76,6 @@ public class ReconcileAccountUseCase {
                                         calculatedBalance.getValue());
                 }
 
-                // Persist reconciliation record
                 var reconciliationJpa = EntityMapper.toJpa(reconciliation);
                 reconciliationRepository.save(reconciliationJpa);
 

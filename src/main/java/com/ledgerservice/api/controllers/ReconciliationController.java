@@ -31,141 +31,137 @@ import java.util.UUID;
 @Tag(name = "Reconciliation", description = "Account reconciliation endpoints")
 public class ReconciliationController {
 
-    private final ReconcileAccountUseCase reconcileAccountUseCase;
-    private final AnalyzeDivergenceUseCase analyzeDivergenceUseCase;
-    private final ReconciliationRecordJpaRepository reconciliationRepository;
-    private final AccountJpaRepository accountRepository;
+        private final ReconcileAccountUseCase reconcileAccountUseCase;
+        private final AnalyzeDivergenceUseCase analyzeDivergenceUseCase;
+        private final ReconciliationRecordJpaRepository reconciliationRepository;
+        private final AccountJpaRepository accountRepository;
 
-    public ReconciliationController(
-            ReconcileAccountUseCase reconcileAccountUseCase,
-            AnalyzeDivergenceUseCase analyzeDivergenceUseCase,
-            ReconciliationRecordJpaRepository reconciliationRepository,
-            AccountJpaRepository accountRepository) {
-        this.reconcileAccountUseCase = reconcileAccountUseCase;
-        this.analyzeDivergenceUseCase = analyzeDivergenceUseCase;
-        this.reconciliationRepository = reconciliationRepository;
-        this.accountRepository = accountRepository;
-    }
+        public ReconciliationController(
+                        ReconcileAccountUseCase reconcileAccountUseCase,
+                        AnalyzeDivergenceUseCase analyzeDivergenceUseCase,
+                        ReconciliationRecordJpaRepository reconciliationRepository,
+                        AccountJpaRepository accountRepository) {
+                this.reconcileAccountUseCase = reconcileAccountUseCase;
+                this.analyzeDivergenceUseCase = analyzeDivergenceUseCase;
+                this.reconciliationRepository = reconciliationRepository;
+                this.accountRepository = accountRepository;
+        }
 
-    @PostMapping
-    @Operation(summary = "Reconcile account", description = "Compares expected balance with calculated balance. Detects divergences but does not auto-correct.")
-    public ResponseEntity<ReconciliationResponse> reconcileAccount(@Valid @RequestBody ReconciliationRequest request) {
+        @PostMapping
+        @Operation(summary = "Reconcile account", description = "Compares expected balance with calculated balance. Detects divergences but does not auto-correct.")
+        public ResponseEntity<ReconciliationResponse> reconcileAccount(
+                        @Valid @RequestBody ReconciliationRequest request) {
 
-        // Execute use case
-        var result = reconcileAccountUseCase.execute(
-                request.accountId(),
-                Money.of(request.expectedBalance()));
+                var result = reconcileAccountUseCase.execute(
+                                request.accountId(),
+                                Money.of(request.expectedBalance()));
 
-        // Map to response DTO
-        ReconciliationResponse response = new ReconciliationResponse(
-                result.accountId(),
-                result.expectedBalance().getValue(),
-                result.calculatedBalance().getValue(),
-                result.difference().getValue(),
-                result.status().name(),
-                result.isMatch(),
-                result.isMismatch());
+                ReconciliationResponse response = new ReconciliationResponse(
+                                result.accountId(),
+                                result.expectedBalance().getValue(),
+                                result.calculatedBalance().getValue(),
+                                result.difference().getValue(),
+                                result.status().name(),
+                                result.isMatch(),
+                                result.isMismatch());
 
-        return ResponseEntity.ok(response);
-    }
+                return ResponseEntity.ok(response);
+        }
 
-    @GetMapping("/{accountId}")
-    @Operation(summary = "Get reconciliation history", description = "Returns all reconciliation records for an account, ordered by date descending")
-    public ResponseEntity<List<ReconciliationResponse>> getReconciliationHistory(@PathVariable UUID accountId) {
+        @GetMapping("/{accountId}")
+        @Operation(summary = "Get reconciliation history", description = "Returns all reconciliation records for an account, ordered by date descending")
+        public ResponseEntity<List<ReconciliationResponse>> getReconciliationHistory(@PathVariable UUID accountId) {
 
-        List<ReconciliationRecordJpaEntity> records = reconciliationRepository
-                .findByAccountIdOrderByCreatedAtDesc(accountId);
+                List<ReconciliationRecordJpaEntity> records = reconciliationRepository
+                                .findByAccountIdOrderByCreatedAtDesc(accountId);
 
-        List<ReconciliationResponse> responses = records.stream()
-                .map(rec -> new ReconciliationResponse(
-                        rec.getAccountId(),
-                        rec.getExpectedBalance(),
-                        rec.getCalculatedBalance(),
-                        rec.getDifference(),
-                        rec.getStatus().name(),
-                        rec.getStatus().name().equals("MATCH"),
-                        rec.getStatus().name().equals("MISMATCH")))
-                .toList();
+                List<ReconciliationResponse> responses = records.stream()
+                                .map(rec -> new ReconciliationResponse(
+                                                rec.getAccountId(),
+                                                rec.getExpectedBalance(),
+                                                rec.getCalculatedBalance(),
+                                                rec.getDifference(),
+                                                rec.getStatus().name(),
+                                                rec.getStatus().name().equals("MATCH"),
+                                                rec.getStatus().name().equals("MISMATCH")))
+                                .toList();
 
-        return ResponseEntity.ok(responses);
-    }
+                return ResponseEntity.ok(responses);
+        }
 
-    @GetMapping("/dashboard")
-    @Operation(summary = "Reconciliation dashboard", description = "Returns statistics and recent reconciliations across all accounts")
-    public ResponseEntity<ReconciliationDashboardResponse> getDashboard() {
+        @GetMapping("/dashboard")
+        @Operation(summary = "Reconciliation dashboard", description = "Returns statistics and recent reconciliations across all accounts")
+        public ResponseEntity<ReconciliationDashboardResponse> getDashboard() {
 
-        // Total accounts
-        long totalAccounts = accountRepository.count();
+                long totalAccounts = accountRepository.count();
 
-        // Accounts with mismatches (distinct account_ids with MISMATCH status)
-        long accountsWithMismatch = reconciliationRepository
-                .findAll()
-                .stream()
-                .filter(rec -> "MISMATCH".equals(rec.getStatus().name()))
-                .map(ReconciliationRecordJpaEntity::getAccountId)
-                .distinct()
-                .count();
+                long accountsWithMismatch = reconciliationRepository
+                                .findAll()
+                                .stream()
+                                .filter(rec -> "MISMATCH".equals(rec.getStatus().name()))
+                                .map(ReconciliationRecordJpaEntity::getAccountId)
+                                .distinct()
+                                .count();
 
-        // Largest difference
-        BigDecimal largestDifference = reconciliationRepository
-                .findAll()
-                .stream()
-                .map(rec -> rec.getDifference().abs())
-                .max(Comparator.naturalOrder())
-                .orElse(BigDecimal.ZERO);
+                BigDecimal largestDifference = reconciliationRepository
+                                .findAll()
+                                .stream()
+                                .map(rec -> rec.getDifference().abs())
+                                .max(Comparator.naturalOrder())
+                                .orElse(BigDecimal.ZERO);
 
-        // Recent reconciliations (last 10)
-        List<ReconciliationRecordJpaEntity> recentRecords = reconciliationRepository
-                .findAll(PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt")))
-                .getContent();
+                List<ReconciliationRecordJpaEntity> recentRecords = reconciliationRepository
+                                .findAll(PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt")))
+                                .getContent();
 
-        List<ReconciliationDashboardResponse.ReconciliationSummary> recentSummaries = recentRecords.stream()
-                .map(rec -> new ReconciliationDashboardResponse.ReconciliationSummary(
-                        rec.getAccountId(),
-                        rec.getExpectedBalance(),
-                        rec.getCalculatedBalance(),
-                        rec.getDifference(),
-                        rec.getStatus().name(),
-                        rec.getCreatedAt()))
-                .toList();
+                List<ReconciliationDashboardResponse.ReconciliationSummary> recentSummaries = recentRecords.stream()
+                                .map(rec -> new ReconciliationDashboardResponse.ReconciliationSummary(
+                                                rec.getAccountId(),
+                                                rec.getExpectedBalance(),
+                                                rec.getCalculatedBalance(),
+                                                rec.getDifference(),
+                                                rec.getStatus().name(),
+                                                rec.getCreatedAt()))
+                                .toList();
 
-        ReconciliationDashboardResponse response = new ReconciliationDashboardResponse(
-                totalAccounts,
-                accountsWithMismatch,
-                largestDifference,
-                recentSummaries);
+                ReconciliationDashboardResponse response = new ReconciliationDashboardResponse(
+                                totalAccounts,
+                                accountsWithMismatch,
+                                largestDifference,
+                                recentSummaries);
 
-        return ResponseEntity.ok(response);
-    }
+                return ResponseEntity.ok(response);
+        }
 
-    @GetMapping("/divergence/{reconciliationId}")
-    @Operation(summary = "Analyze divergence", description = "Analyzes a specific reconciliation divergence, showing recent entries timeline")
-    public ResponseEntity<DivergenceAnalysisResponse> analyzeDivergence(
-            @PathVariable UUID reconciliationId,
-            @RequestParam(defaultValue = "20") int entryLimit) {
+        @GetMapping("/divergence/{reconciliationId}")
+        @Operation(summary = "Analyze divergence", description = "Analyzes a specific reconciliation divergence, showing recent entries timeline")
+        public ResponseEntity<DivergenceAnalysisResponse> analyzeDivergence(
+                        @PathVariable UUID reconciliationId,
+                        @RequestParam(defaultValue = "20") int entryLimit) {
 
-        var result = analyzeDivergenceUseCase.execute(reconciliationId, entryLimit);
+                var result = analyzeDivergenceUseCase.execute(reconciliationId, entryLimit);
 
-        var entryDetails = result.recentEntries().stream()
-                .map(entry -> new DivergenceAnalysisResponse.EntryDetail(
-                        entry.getId(),
-                        entry.getOperationId(),
-                        entry.getAmount(),
-                        entry.getDirection().name(),
-                        entry.getEntryType(),
-                        entry.getSource(),
-                        entry.getCreatedAt()))
-                .toList();
+                var entryDetails = result.recentEntries().stream()
+                                .map(entry -> new DivergenceAnalysisResponse.EntryDetail(
+                                                entry.getId(),
+                                                entry.getOperationId(),
+                                                entry.getAmount(),
+                                                entry.getDirection().name(),
+                                                entry.getEntryType(),
+                                                entry.getSource(),
+                                                entry.getCreatedAt()))
+                                .toList();
 
-        DivergenceAnalysisResponse response = new DivergenceAnalysisResponse(
-                result.reconciliation().getAccountId(),
-                result.reconciliation().getExpectedBalance().getValue(),
-                result.reconciliation().getCalculatedBalance().getValue(),
-                result.reconciliation().getDifference().getValue(),
-                result.reconciliation().getReconciliationDate().atStartOfDay(), // Convert LocalDate to LocalDateTime
-                entryDetails,
-                result.analysis());
+                DivergenceAnalysisResponse response = new DivergenceAnalysisResponse(
+                                result.reconciliation().getAccountId(),
+                                result.reconciliation().getExpectedBalance().getValue(),
+                                result.reconciliation().getCalculatedBalance().getValue(),
+                                result.reconciliation().getDifference().getValue(),
+                                result.reconciliation().getReconciliationDate().atStartOfDay(), // Convert LocalDate to
+                                                                                                // LocalDateTime
+                                entryDetails,
+                                result.analysis());
 
-        return ResponseEntity.ok(response);
-    }
+                return ResponseEntity.ok(response);
+        }
 }

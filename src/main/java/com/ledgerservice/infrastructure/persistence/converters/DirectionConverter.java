@@ -12,17 +12,15 @@ public class DirectionConverter implements AttributeConverter<Direction, String>
 
     @Override
     public String convertToDatabaseColumn(Direction attribute) {
-        if (attribute == null) {
+        if (attribute == null)
             return null;
-        }
         return attribute.name().toLowerCase();
     }
 
     @Override
     public Direction convertToEntityAttribute(String dbData) {
-        if (dbData == null) {
+        if (dbData == null)
             return null;
-        }
         return Direction.valueOf(dbData.toUpperCase());
     }
 }

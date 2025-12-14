@@ -37,252 +37,236 @@ import java.util.stream.IntStream;
 @Tag(name = "Simulation", description = "Endpoints to demonstrate failure tolerance")
 public class SimulationController {
 
-    private static final Logger log = LoggerFactory.getLogger(SimulationController.class);
-    private final ProcessOperationUseCase processOperationUseCase;
+        private static final Logger log = LoggerFactory.getLogger(SimulationController.class);
+        private final ProcessOperationUseCase processOperationUseCase;
 
-    public SimulationController(ProcessOperationUseCase processOperationUseCase) {
-        this.processOperationUseCase = processOperationUseCase;
-    }
-
-    /**
-     * Simulates duplicate requests arriving in parallel
-     * Proves that only 1 operation is created despite N identical requests
-     */
-    @PostMapping("/duplicate")
-    @io.swagger.v3.oas.annotations.Operation(summary = "Simulate duplicate requests", description = "Sends the same operation N times in parallel. Only 1 should be processed, others detected as duplicates.")
-    public ResponseEntity<SimulationResponse> simulateDuplicates(
-            @Valid @RequestBody SimulationOperationRequest request) {
-        long startTime = System.currentTimeMillis();
-        int parallelCount = request.parallelCount() != null ? request.parallelCount() : 10;
-
-        log.info("Starting duplicate simulation: {} parallel requests for external_reference={}",
-                parallelCount, request.externalReference());
-
-        // Create command
-        var command = buildCommand(request);
-
-        // Execute in parallel using virtual threads (Java 21)
-        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-
-        try {
-            List<CompletableFuture<Operation>> futures = IntStream.range(0, parallelCount)
-                    .mapToObj(i -> CompletableFuture.supplyAsync(() -> {
-                        log.debug("Submitting request #{} for {}", i, request.externalReference());
-                        return processOperationUseCase.execute(command);
-                    }, executor))
-                    .collect(Collectors.toList());
-
-            // Wait for all to complete
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-            // Collect results
-            List<Operation> operations = futures.stream()
-                    .map(CompletableFuture::join)
-                    .collect(Collectors.toList());
-
-            // Count unique operations (should be 1)
-            long uniqueOperations = operations.stream()
-                    .map(Operation::getId)
-                    .distinct()
-                    .count();
-
-            long executionTime = System.currentTimeMillis() - startTime;
-
-            log.info("Duplicate simulation completed: {} requests, {} unique operation(s), {}ms",
-                    parallelCount, uniqueOperations, executionTime);
-
-            // Build response
-            List<OperationResponse> operationResponses = operations.stream()
-                    .limit(1) // Show only the unique operation
-                    .map(this::toResponse)
-                    .collect(Collectors.toList());
-
-            SimulationResponse response = new SimulationResponse(
-                    parallelCount,
-                    (int) uniqueOperations,
-                    parallelCount - (int) uniqueOperations,
-                    executionTime,
-                    String.format("✅ Idempotency working! %d parallel requests resulted in %d operation(s)",
-                            parallelCount, uniqueOperations),
-                    operationResponses);
-
-            return ResponseEntity.ok(response);
-
-        } finally {
-            executor.shutdown();
+        public SimulationController(ProcessOperationUseCase processOperationUseCase) {
+                this.processOperationUseCase = processOperationUseCase;
         }
-    }
 
-    /**
-     * Simulates operations arriving out of order
-     * Proves that result is consistent regardless of processing order
-     */
-    @PostMapping("/out-of-order")
-    @io.swagger.v3.oas.annotations.Operation(summary = "Simulate out-of-order processing", description = "Processes multiple operations in randomized order. Results should be consistent.")
-    public ResponseEntity<SimulationResponse> simulateOutOfOrder(
-            @Valid @RequestBody List<SimulationOperationRequest> requests) {
-        long startTime = System.currentTimeMillis();
+        /**
+         * Simulates duplicate requests arriving in parallel
+         * Proves that only 1 operation is created despite N identical requests
+         */
+        @PostMapping("/duplicate")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Simulate duplicate requests", description = "Sends the same operation N times in parallel. Only 1 should be processed, others detected as duplicates.")
+        public ResponseEntity<SimulationResponse> simulateDuplicates(
+                        @Valid @RequestBody SimulationOperationRequest request) {
+                long startTime = System.currentTimeMillis();
+                int parallelCount = request.parallelCount() != null ? request.parallelCount() : 10;
 
-        log.info("Starting out-of-order simulation with {} operations", requests.size());
+                log.info("Starting duplicate simulation: {} parallel requests for external_reference={}",
+                                parallelCount, request.externalReference());
 
-        // Shuffle requests to simulate random arrival order
-        List<SimulationOperationRequest> shuffled = new ArrayList<>(requests);
-        Collections.shuffle(shuffled);
+                var command = buildCommand(request);
+                ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
-        // Process in shuffled order
-        List<Operation> operations = shuffled.stream()
-                .map(this::buildCommand)
-                .map(processOperationUseCase::execute)
-                .collect(Collectors.toList());
+                try {
+                        List<CompletableFuture<Operation>> futures = IntStream.range(0, parallelCount)
+                                        .mapToObj(i -> CompletableFuture.supplyAsync(() -> {
+                                                log.debug("Submitting request #{} for {}", i,
+                                                                request.externalReference());
+                                                return processOperationUseCase.execute(command);
+                                        }, executor))
+                                        .collect(Collectors.toList());
 
-        long executionTime = System.currentTimeMillis() - startTime;
+                        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
-        log.info("Out-of-order simulation completed: {} operations processed in {}ms",
-                operations.size(), executionTime);
+                        List<Operation> operations = futures.stream()
+                                        .map(CompletableFuture::join)
+                                        .collect(Collectors.toList());
 
-        // Build response
-        List<OperationResponse> operationResponses = operations.stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+                        long uniqueOperations = operations.stream()
+                                        .map(Operation::getId)
+                                        .distinct()
+                                        .count();
 
-        SimulationResponse response = new SimulationResponse(
-                requests.size(),
-                operations.size(),
-                0,
-                executionTime,
-                "✅ Out-of-order tolerance working! Operations processed in random order with consistent results",
-                operationResponses);
+                        long executionTime = System.currentTimeMillis() - startTime;
 
-        return ResponseEntity.ok(response);
-    }
+                        log.info("Duplicate simulation completed: {} requests, {} unique operation(s), {}ms",
+                                        parallelCount, uniqueOperations, executionTime);
 
-    /**
-     * Simulates delayed operation
-     * Proves that system handles async processing correctly
-     */
-    @PostMapping("/delayed")
-    @io.swagger.v3.oas.annotations.Operation(summary = "Simulate delayed operation", description = "Processes operation after specified delay (simulates network latency)")
-    public ResponseEntity<SimulationResponse> simulateDelay(
-            @Valid @RequestBody SimulationOperationRequest request) {
-        long startTime = System.currentTimeMillis();
-        long delayMs = request.delayMs() != null ? request.delayMs() : 1000L;
+                        List<OperationResponse> operationResponses = operations.stream()
+                                        .limit(1)
+                                        .map(this::toResponse)
+                                        .collect(Collectors.toList());
 
-        log.info("Starting delayed simulation: {}ms delay for external_reference={}",
-                delayMs, request.externalReference());
+                        SimulationResponse response = new SimulationResponse(
+                                        parallelCount,
+                                        (int) uniqueOperations,
+                                        parallelCount - (int) uniqueOperations,
+                                        executionTime,
+                                        String.format("Idempotency working! %d parallel requests resulted in %d operation(s)",
+                                                        parallelCount, uniqueOperations),
+                                        operationResponses);
 
-        try {
-            // Simulate network delay
-            Thread.sleep(delayMs);
+                        return ResponseEntity.ok(response);
 
-            // Process operation
-            var command = buildCommand(request);
-            Operation operation = processOperationUseCase.execute(command);
-
-            long executionTime = System.currentTimeMillis() - startTime;
-
-            log.info("Delayed simulation completed: operation processed after {}ms total", executionTime);
-
-            SimulationResponse response = new SimulationResponse(
-                    1,
-                    1,
-                    0,
-                    executionTime,
-                    String.format("✅ Delay tolerance working! Operation processed successfully after %dms delay",
-                            delayMs),
-                    List.of(toResponse(operation)));
-
-            return ResponseEntity.ok(response);
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Simulation interrupted", e);
+                } finally {
+                        executor.shutdown();
+                }
         }
-    }
 
-    /**
-     * Simulates retry scenario
-     * Same operation arriving multiple times (simulates webhook retry)
-     */
-    @PostMapping("/retry")
-    @io.swagger.v3.oas.annotations.Operation(summary = "Simulate retry scenario", description = "Simulates webhook retry - same operation arriving multiple times with delays")
-    public ResponseEntity<SimulationResponse> simulateRetry(
-            @Valid @RequestBody SimulationOperationRequest request) {
-        long startTime = System.currentTimeMillis();
-        int retryCount = request.parallelCount() != null ? request.parallelCount() : 3;
-        long retryDelayMs = request.delayMs() != null ? request.delayMs() : 500L;
+        /**
+         * Simulates operations arriving out of order
+         * Proves that result is consistent regardless of processing order
+         */
+        @PostMapping("/out-of-order")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Simulate out-of-order processing", description = "Processes multiple operations in randomized order. Results should be consistent.")
+        public ResponseEntity<SimulationResponse> simulateOutOfOrder(
+                        @Valid @RequestBody List<SimulationOperationRequest> requests) {
+                long startTime = System.currentTimeMillis();
 
-        log.info("Starting retry simulation: {} retries with {}ms delay for external_reference={}",
-                retryCount, retryDelayMs, request.externalReference());
+                log.info("Starting out-of-order simulation with {} operations", requests.size());
 
-        var command = buildCommand(request);
-        List<Operation> operations = new ArrayList<>();
+                List<SimulationOperationRequest> shuffled = new ArrayList<>(requests);
+                Collections.shuffle(shuffled);
 
-        try {
-            // First attempt
-            operations.add(processOperationUseCase.execute(command));
+                List<Operation> operations = shuffled.stream()
+                                .map(this::buildCommand)
+                                .map(processOperationUseCase::execute)
+                                .collect(Collectors.toList());
 
-            // Retry attempts
-            for (int i = 0; i < retryCount; i++) {
-                Thread.sleep(retryDelayMs);
-                log.debug("Retry attempt #{}", i + 1);
-                operations.add(processOperationUseCase.execute(command));
-            }
+                long executionTime = System.currentTimeMillis() - startTime;
 
-            long executionTime = System.currentTimeMillis() - startTime;
+                log.info("Out-of-order simulation completed: {} operations processed in {}ms",
+                                operations.size(), executionTime);
 
-            // Verify all returned same operation ID
-            long uniqueOperations = operations.stream()
-                    .map(Operation::getId)
-                    .distinct()
-                    .count();
+                List<OperationResponse> operationResponses = operations.stream()
+                                .map(this::toResponse)
+                                .collect(Collectors.toList());
 
-            log.info("Retry simulation completed: {} attempts, {} unique operation(s), {}ms total",
-                    retryCount + 1, uniqueOperations, executionTime);
+                SimulationResponse response = new SimulationResponse(
+                                requests.size(),
+                                operations.size(),
+                                0,
+                                executionTime,
+                                "✅ Out-of-order tolerance working! Operations processed in random order with consistent results",
+                                operationResponses);
 
-            SimulationResponse response = new SimulationResponse(
-                    retryCount + 1,
-                    (int) uniqueOperations,
-                    retryCount + 1 - (int) uniqueOperations,
-                    executionTime,
-                    String.format("✅ Retry tolerance working! %d webhook retries resulted in %d operation(s)",
-                            retryCount + 1, uniqueOperations),
-                    List.of(toResponse(operations.get(0))));
-
-            return ResponseEntity.ok(response);
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Simulation interrupted", e);
+                return ResponseEntity.ok(response);
         }
-    }
 
-    // Helper methods
+        /**
+         * Simulates delayed operation
+         * Proves that system handles async processing correctly
+         */
+        @PostMapping("/delayed")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Simulate delayed operation", description = "Processes operation after specified delay (simulates network latency)")
+        public ResponseEntity<SimulationResponse> simulateDelay(
+                        @Valid @RequestBody SimulationOperationRequest request) {
+                long startTime = System.currentTimeMillis();
+                long delayMs = request.delayMs() != null ? request.delayMs() : 1000L;
 
-    private ProcessOperationUseCase.ProcessOperationCommand buildCommand(SimulationOperationRequest request) {
-        return new ProcessOperationUseCase.ProcessOperationCommand(
-                ExternalReference.of(request.externalReference()),
-                mapOperationType(request.type()),
-                request.sourceAccountId(),
-                request.targetAccountId(),
-                Money.of(request.amount()),
-                "simulation");
-    }
+                log.info("Starting delayed simulation: {}ms delay for external_reference={}",
+                                delayMs, request.externalReference());
 
-    private OperationType mapOperationType(CreateOperationRequest.OperationTypeDto dto) {
-        return switch (dto) {
-            case DEPOSIT -> OperationType.DEPOSIT;
-            case WITHDRAWAL -> OperationType.WITHDRAWAL;
-            case TRANSFER -> OperationType.TRANSFER;
-        };
-    }
+                try {
+                        Thread.sleep(delayMs);
 
-    private OperationResponse toResponse(Operation operation) {
-        return new OperationResponse(
-                operation.getId(),
-                operation.getExternalReference().getValue(),
-                operation.getType().name(),
-                operation.getStatus().name(),
-                operation.getCreatedAt(),
-                operation.getProcessedAt());
-    }
+                        var command = buildCommand(request);
+                        Operation operation = processOperationUseCase.execute(command);
+                        long executionTime = System.currentTimeMillis() - startTime;
+
+                        log.info("Delayed simulation completed: operation processed after {}ms total", executionTime);
+
+                        SimulationResponse response = new SimulationResponse(
+                                        1,
+                                        1,
+                                        0,
+                                        executionTime,
+                                        String.format("✅ Delay tolerance working! Operation processed successfully after %dms delay",
+                                                        delayMs),
+                                        List.of(toResponse(operation)));
+
+                        return ResponseEntity.ok(response);
+
+                } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Simulation interrupted", e);
+                }
+        }
+
+        /**
+         * Simulates retry scenario
+         * Same operation arriving multiple times (simulates webhook retry)
+         */
+        @PostMapping("/retry")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Simulate retry scenario", description = "Simulates webhook retry - same operation arriving multiple times with delays")
+        public ResponseEntity<SimulationResponse> simulateRetry(
+                        @Valid @RequestBody SimulationOperationRequest request) {
+                long startTime = System.currentTimeMillis();
+                int retryCount = request.parallelCount() != null ? request.parallelCount() : 3;
+                long retryDelayMs = request.delayMs() != null ? request.delayMs() : 500L;
+
+                log.info("Starting retry simulation: {} retries with {}ms delay for external_reference={}",
+                                retryCount, retryDelayMs, request.externalReference());
+
+                var command = buildCommand(request);
+                List<Operation> operations = new ArrayList<>();
+
+                try {
+                        operations.add(processOperationUseCase.execute(command));
+
+                        for (int i = 0; i < retryCount; i++) {
+                                Thread.sleep(retryDelayMs);
+                                log.debug("Retry attempt #{}", i + 1);
+                                operations.add(processOperationUseCase.execute(command));
+                        }
+
+                        long executionTime = System.currentTimeMillis() - startTime;
+
+                        long uniqueOperations = operations.stream()
+                                        .map(Operation::getId)
+                                        .distinct()
+                                        .count();
+
+                        log.info("Retry simulation completed: {} attempts, {} unique operation(s), {}ms total",
+                                        retryCount + 1, uniqueOperations, executionTime);
+
+                        SimulationResponse response = new SimulationResponse(
+                                        retryCount + 1,
+                                        (int) uniqueOperations,
+                                        retryCount + 1 - (int) uniqueOperations,
+                                        executionTime,
+                                        String.format("Retry tolerance working! %d webhook retries resulted in %d operation(s)",
+                                                        retryCount + 1, uniqueOperations),
+                                        List.of(toResponse(operations.get(0))));
+
+                        return ResponseEntity.ok(response);
+
+                } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Simulation interrupted", e);
+                }
+        }
+
+        // Helper methods
+        private ProcessOperationUseCase.ProcessOperationCommand buildCommand(SimulationOperationRequest request) {
+                return new ProcessOperationUseCase.ProcessOperationCommand(
+                                ExternalReference.of(request.externalReference()),
+                                mapOperationType(request.type()),
+                                request.sourceAccountId(),
+                                request.targetAccountId(),
+                                Money.of(request.amount()),
+                                "simulation");
+        }
+
+        private OperationType mapOperationType(CreateOperationRequest.OperationTypeDto dto) {
+                return switch (dto) {
+                        case DEPOSIT -> OperationType.DEPOSIT;
+                        case WITHDRAWAL -> OperationType.WITHDRAWAL;
+                        case TRANSFER -> OperationType.TRANSFER;
+                };
+        }
+
+        private OperationResponse toResponse(Operation operation) {
+                return new OperationResponse(
+                                operation.getId(),
+                                operation.getExternalReference().getValue(),
+                                operation.getType().name(),
+                                operation.getStatus().name(),
+                                operation.getCreatedAt(),
+                                operation.getProcessedAt());
+        }
 }

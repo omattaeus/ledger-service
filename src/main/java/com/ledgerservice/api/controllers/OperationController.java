@@ -30,7 +30,6 @@ public class OperationController {
     @Operation(summary = "Create a new operation", description = "Creates a new financial operation (deposit, withdrawal, or transfer). Idempotent based on external reference.")
     public ResponseEntity<OperationResponse> createOperation(@Valid @RequestBody CreateOperationRequest request) {
 
-        // Map DTO to use case command
         var command = new ProcessOperationUseCase.ProcessOperationCommand(
                 ExternalReference.of(request.externalReference()),
                 mapOperationType(request.type()),
@@ -39,10 +38,8 @@ public class OperationController {
                 Money.of(request.amount()),
                 request.source());
 
-        // Execute use case
         com.ledgerservice.domain.entities.Operation operation = processOperationUseCase.execute(command);
 
-        // Map to response DTO
         OperationResponse response = new OperationResponse(
                 operation.getId(),
                 operation.getExternalReference().getValue(),

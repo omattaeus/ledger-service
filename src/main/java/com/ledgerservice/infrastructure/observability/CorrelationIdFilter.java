@@ -33,23 +33,17 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             FilterChain filterChain) throws ServletException, IOException {
 
         try {
-            // Get correlation ID from header or generate new one
             String correlationId = request.getHeader(CORRELATION_ID_HEADER);
             if (correlationId == null || correlationId.isBlank()) {
                 correlationId = UUID.randomUUID().toString();
             }
 
-            // Put in MDC (will be available in all logs in this thread)
             MDC.put(CORRELATION_ID_MDC_KEY, correlationId);
 
-            // Add to response header
             response.setHeader(CORRELATION_ID_HEADER, correlationId);
-
-            // Continue filter chain
             filterChain.doFilter(request, response);
 
         } finally {
-            // Clean up MDC to avoid memory leaks
             MDC.remove(CORRELATION_ID_MDC_KEY);
         }
     }

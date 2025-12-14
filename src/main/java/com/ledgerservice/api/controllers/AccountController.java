@@ -30,10 +30,8 @@ public class AccountController {
     @Operation(summary = "Get account balance", description = "Calculates account balance in real-time by summing all entries. No cached value is used.")
     public ResponseEntity<BalanceResponse> getBalance(@PathVariable UUID accountId) {
 
-        // Execute use case
         var result = calculateBalanceUseCase.execute(accountId);
 
-        // Map to response DTO
         BalanceResponse response = new BalanceResponse(
                 result.accountId(),
                 result.balance().getValue(),

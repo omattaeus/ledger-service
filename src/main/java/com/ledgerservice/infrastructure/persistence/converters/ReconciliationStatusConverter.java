@@ -12,17 +12,15 @@ public class ReconciliationStatusConverter implements AttributeConverter<Reconci
 
     @Override
     public String convertToDatabaseColumn(ReconciliationStatus attribute) {
-        if (attribute == null) {
+        if (attribute == null)
             return null;
-        }
         return attribute.name().toLowerCase();
     }
 
     @Override
     public ReconciliationStatus convertToEntityAttribute(String dbData) {
-        if (dbData == null) {
+        if (dbData == null)
             return null;
-        }
         return ReconciliationStatus.valueOf(dbData.toUpperCase());
     }
 }

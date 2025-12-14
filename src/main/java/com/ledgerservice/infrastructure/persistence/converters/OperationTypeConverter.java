@@ -12,17 +12,15 @@ public class OperationTypeConverter implements AttributeConverter<OperationType,
 
     @Override
     public String convertToDatabaseColumn(OperationType attribute) {
-        if (attribute == null) {
+        if (attribute == null)
             return null;
-        }
         return attribute.name().toLowerCase();
     }
 
     @Override
     public OperationType convertToEntityAttribute(String dbData) {
-        if (dbData == null) {
+        if (dbData == null)
             return null;
-        }
         return OperationType.valueOf(dbData.toUpperCase());
     }
 }

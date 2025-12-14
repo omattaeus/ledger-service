@@ -26,51 +26,47 @@ import java.util.stream.Collectors;
 @Service
 public class CalculateBalanceUseCase {
 
-    private final AccountJpaRepository accountRepository;
-    private final EntryJpaRepository entryRepository;
-    private final BalanceCalculator balanceCalculator;
+        private final AccountJpaRepository accountRepository;
+        private final EntryJpaRepository entryRepository;
+        private final BalanceCalculator balanceCalculator;
 
-    public CalculateBalanceUseCase(
-            AccountJpaRepository accountRepository,
-            EntryJpaRepository entryRepository,
-            BalanceCalculator balanceCalculator) {
-        this.accountRepository = accountRepository;
-        this.entryRepository = entryRepository;
-        this.balanceCalculator = balanceCalculator;
-    }
+        public CalculateBalanceUseCase(
+                        AccountJpaRepository accountRepository,
+                        EntryJpaRepository entryRepository,
+                        BalanceCalculator balanceCalculator) {
+                this.accountRepository = accountRepository;
+                this.entryRepository = entryRepository;
+                this.balanceCalculator = balanceCalculator;
+        }
 
-    @Transactional(readOnly = true)
-    public BalanceResult execute(UUID accountId) {
-        // 1. Validate account exists
-        accountRepository.findById(accountId)
-                .orElseThrow(() -> new AccountNotFoundException(accountId));
+        @Transactional(readOnly = true)
+        public BalanceResult execute(UUID accountId) {
+                accountRepository.findById(accountId)
+                                .orElseThrow(() -> new AccountNotFoundException(accountId));
 
-        // 2. Load all entries for account
-        var entryJpaList = entryRepository.findByAccountIdOrderByCreatedAtAsc(accountId);
+                var entryJpaList = entryRepository.findByAccountIdOrderByCreatedAtAsc(accountId);
 
-        // 3. Convert to domain entries
-        List<Entry> entries = entryJpaList.stream()
-                .map(EntityMapper::toDomain)
-                .collect(Collectors.toList());
+                List<Entry> entries = entryJpaList.stream()
+                                .map(EntityMapper::toDomain)
+                                .collect(Collectors.toList());
 
-        // 4. Calculate balance
-        Money balance = balanceCalculator.calculateBalance(entries);
-        long entryCount = balanceCalculator.countEntries(entries);
+                Money balance = balanceCalculator.calculateBalance(entries);
+                long entryCount = balanceCalculator.countEntries(entries);
 
-        return new BalanceResult(
-                accountId,
-                balance,
-                entryCount,
-                LocalDateTime.now());
-    }
+                return new BalanceResult(
+                                accountId,
+                                balance,
+                                entryCount,
+                                LocalDateTime.now());
+        }
 
-    /**
-     * Result object containing balance calculation details
-     */
-    public record BalanceResult(
-            UUID accountId,
-            Money balance,
-            long entriesCount,
-            LocalDateTime calculatedAt) {
-    }
+        /**
+         * Result object containing balance calculation details
+         */
+        public record BalanceResult(
+                        UUID accountId,
+                        Money balance,
+                        long entriesCount,
+                        LocalDateTime calculatedAt) {
+        }
 }

@@ -12,17 +12,15 @@ public class OperationStatusConverter implements AttributeConverter<OperationSta
 
     @Override
     public String convertToDatabaseColumn(OperationStatus attribute) {
-        if (attribute == null) {
+        if (attribute == null)
             return null;
-        }
         return attribute.name().toLowerCase();
     }
 
     @Override
     public OperationStatus convertToEntityAttribute(String dbData) {
-        if (dbData == null) {
+        if (dbData == null)
             return null;
-        }
         return OperationStatus.valueOf(dbData.toUpperCase());
     }
 }
