@@ -18,3 +18,8 @@ logging:
     com.ledger-service: TRACE
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+  flyway:
+    enabled: true
+    clean-disabled: false
+    baseline-on-migrate: true
