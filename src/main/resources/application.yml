@@ -16,6 +16,8 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        type:
+          preferred_jdbc_type_for_enum: VARCHAR
     open-in-view: false
 
   flyway:
