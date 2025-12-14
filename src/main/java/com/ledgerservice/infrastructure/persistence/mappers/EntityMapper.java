@@ -3,11 +3,13 @@ package com.ledgerservice.infrastructure.persistence.mappers;
 import com.ledgerservice.domain.entities.Account;
 import com.ledgerservice.domain.entities.Entry;
 import com.ledgerservice.domain.entities.Operation;
+import com.ledgerservice.domain.entities.ReconciliationRecord;
 import com.ledgerservice.domain.valueobjects.ExternalReference;
 import com.ledgerservice.domain.valueobjects.Money;
 import com.ledgerservice.infrastructure.persistence.entities.AccountJpaEntity;
 import com.ledgerservice.infrastructure.persistence.entities.EntryJpaEntity;
 import com.ledgerservice.infrastructure.persistence.entities.OperationJpaEntity;
+import com.ledgerservice.infrastructure.persistence.entities.ReconciliationRecordJpaEntity;
 
 /**
  * Maps between domain entities and JPA entities
@@ -76,6 +78,32 @@ public class EntityMapper {
                 jpa.getDirection(),
                 jpa.getEntryType(),
                 jpa.getSource(),
+                jpa.getCreatedAt());
+    }
+
+    // ReconciliationRecord mappings
+
+    public static ReconciliationRecordJpaEntity toJpa(ReconciliationRecord domain) {
+        return new ReconciliationRecordJpaEntity(
+                domain.getId(),
+                domain.getAccountId(),
+                domain.getReconciliationDate(),
+                domain.getExpectedBalance().getValue(),
+                domain.getCalculatedBalance().getValue(),
+                domain.getDifference().getValue(),
+                domain.getStatus(),
+                domain.getCreatedAt());
+    }
+
+    public static ReconciliationRecord toDomain(ReconciliationRecordJpaEntity jpa) {
+        return ReconciliationRecord.reconstitute(
+                jpa.getId(),
+                jpa.getAccountId(),
+                jpa.getReconciliationDate(),
+                Money.of(jpa.getExpectedBalance()),
+                Money.of(jpa.getCalculatedBalance()),
+                Money.of(jpa.getDifference()),
+                jpa.getStatus(),
                 jpa.getCreatedAt());
     }
 }

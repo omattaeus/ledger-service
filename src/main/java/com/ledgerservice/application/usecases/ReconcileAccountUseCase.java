@@ -5,9 +5,11 @@ import com.ledgerservice.domain.entities.ReconciliationRecord;
 import com.ledgerservice.domain.exceptions.AccountNotFoundException;
 import com.ledgerservice.domain.services.BalanceCalculator;
 import com.ledgerservice.domain.valueobjects.Money;
+import com.ledgerservice.infrastructure.observability.StructuredLogger;
 import com.ledgerservice.infrastructure.persistence.mappers.EntityMapper;
 import com.ledgerservice.infrastructure.persistence.repositories.AccountJpaRepository;
 import com.ledgerservice.infrastructure.persistence.repositories.EntryJpaRepository;
+import com.ledgerservice.infrastructure.persistence.repositories.ReconciliationRecordJpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,60 +28,82 @@ import java.util.stream.Collectors;
 @Service
 public class ReconcileAccountUseCase {
 
-    private final AccountJpaRepository accountRepository;
-    private final EntryJpaRepository entryRepository;
-    private final BalanceCalculator balanceCalculator;
+        private final AccountJpaRepository accountRepository;
+        private final EntryJpaRepository entryRepository;
+        private final BalanceCalculator balanceCalculator;
+        private final ReconciliationRecordJpaRepository reconciliationRepository;
+        private final StructuredLogger structuredLogger;
 
-    public ReconcileAccountUseCase(
-            AccountJpaRepository accountRepository,
-            EntryJpaRepository entryRepository,
-            BalanceCalculator balanceCalculator) {
-        this.accountRepository = accountRepository;
-        this.entryRepository = entryRepository;
-        this.balanceCalculator = balanceCalculator;
-    }
+        public ReconcileAccountUseCase(
+                        AccountJpaRepository accountRepository,
+                        EntryJpaRepository entryRepository,
+                        BalanceCalculator balanceCalculator,
+                        ReconciliationRecordJpaRepository reconciliationRepository,
+                        StructuredLogger structuredLogger) {
+                this.accountRepository = accountRepository;
+                this.entryRepository = entryRepository;
+                this.balanceCalculator = balanceCalculator;
+                this.reconciliationRepository = reconciliationRepository;
+                this.structuredLogger = structuredLogger;
+        }
 
-    @Transactional(readOnly = true)
-    public ReconciliationResult execute(UUID accountId, Money expectedBalance) {
-        // 1. Validate account exists
-        accountRepository.findById(accountId)
-                .orElseThrow(() -> new AccountNotFoundException(accountId));
+        @Transactional
+        public ReconciliationResult execute(UUID accountId, Money expectedBalance) {
+                // 1. Validate account exists
+                accountRepository.findById(accountId)
+                                .orElseThrow(() -> new AccountNotFoundException(accountId));
 
-        // 2. Load all entries and calculate balance
-        var entryJpaList = entryRepository.findByAccountIdOrderByCreatedAtAsc(accountId);
-        List<Entry> entries = entryJpaList.stream()
-                .map(EntityMapper::toDomain)
-                .collect(Collectors.toList());
+                // 2. Load all entries and calculate balance
+                var entryJpaList = entryRepository.findByAccountIdOrderByCreatedAtAsc(accountId);
+                List<Entry> entries = entryJpaList.stream()
+                                .map(EntityMapper::toDomain)
+                                .collect(Collectors.toList());
 
-        Money calculatedBalance = balanceCalculator.calculateBalance(entries);
+                Money calculatedBalance = balanceCalculator.calculateBalance(entries);
 
-        // 3. Create reconciliation record (domain logic)
-        ReconciliationRecord record = ReconciliationRecord.create(
-                accountId,
-                expectedBalance,
-                calculatedBalance);
+                // 3. Create reconciliation record (domain logic)
+                ReconciliationRecord reconciliation = ReconciliationRecord.create(
+                                accountId,
+                                expectedBalance,
+                                calculatedBalance);
 
-        // 4. Return result (not persisting for now - will be added in Phase 6)
-        return new ReconciliationResult(
-                record.getAccountId(),
-                record.getExpectedBalance(),
-                record.getCalculatedBalance(),
-                record.getDifference(),
-                record.getStatus(),
-                record.isMatch(),
-                record.isMismatch());
-    }
+                // Log reconciliation result
+                if (reconciliation.isMismatch()) {
+                        structuredLogger.logReconciliationMismatch(
+                                        accountId,
+                                        expectedBalance.getValue(),
+                                        calculatedBalance.getValue(),
+                                        reconciliation.getDifference().getValue());
+                } else {
+                        structuredLogger.logReconciliationMatch(
+                                        accountId,
+                                        calculatedBalance.getValue());
+                }
 
-    /**
-     * Result object for reconciliation
-     */
-    public record ReconciliationResult(
-            UUID accountId,
-            Money expectedBalance,
-            Money calculatedBalance,
-            Money difference,
-            com.ledgerservice.domain.enums.ReconciliationStatus status,
-            boolean isMatch,
-            boolean isMismatch) {
-    }
+                // Persist reconciliation record
+                var reconciliationJpa = EntityMapper.toJpa(reconciliation);
+                reconciliationRepository.save(reconciliationJpa);
+
+                return new ReconciliationResult(
+                                reconciliation.getAccountId(),
+                                reconciliation.getExpectedBalance(),
+                                reconciliation.getCalculatedBalance(),
+                                reconciliation.getDifference(),
+                                reconciliation.getStatus(),
+                                reconciliation.isMatch(),
+                                reconciliation.isMismatch());
+        }
+
+        /**
+         * Result object for reconciliation
+         */
+        public record ReconciliationResult(
+                        UUID accountId,
+                        Money expectedBalance,
+                        Money calculatedBalance,
+                        Money difference,
+                        com.ledgerservice.domain.enums.ReconciliationStatus status,
+                        boolean isMatch,
+                        boolean isMismatch) {
+        }
 }

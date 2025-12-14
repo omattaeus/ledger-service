@@ -20,6 +20,12 @@ public interface EntryJpaRepository extends JpaRepository<EntryJpaEntity, UUID> 
     List<EntryJpaEntity> findByAccountIdOrderByCreatedAtAsc(UUID accountId);
 
     /**
+     * Finds all entries for an account ordered by creation date descending
+     * Used for divergence analysis (showing recent entries first)
+     */
+    List<EntryJpaEntity> findByAccountIdOrderByCreatedAtDesc(UUID accountId);
+
+    /**
      * Finds all entries for an operation
      */
     List<EntryJpaEntity> findByOperationId(UUID operationId);

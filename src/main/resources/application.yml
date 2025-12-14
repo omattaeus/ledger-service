@@ -31,10 +31,17 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        # Expose health, info, metrics for monitoring
+        include: health,info,metrics,prometheus
+      base-path: /actuator
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: always
+      probes:
+        enabled: true  # Enable liveness and readiness probes
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 # Configuração do OpenAPI/Swagger
 springdoc:
@@ -52,9 +59,22 @@ server:
     include-binding-errors: always
     include-stacktrace: on_param
 
+# Logging estruturado com Correlation ID
 logging:
   level:
     root: INFO
-    com.ledger-service: DEBUG
+    com.ledgerservice: DEBUG
+    org.springframework.web: INFO
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    # Include correlation ID in every log line
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%X{correlationId:-NO-CORRELATION-ID}] [%thread] %-5level %logger{36} - %msg%n"
+  
+# Application info for /actuator/info
+info:
+  app:
+    name: ${spring.application.name}
+    description: Financial Ledger Service - Demonstrating robust distributed systems patterns
+    version: 0.0.1-SNAPSHOT
+    encoding: @project.build.sourceEncoding@
+    java:
+      version: @java.version@
